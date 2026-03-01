@@ -431,6 +431,23 @@ def analyze_video_endpoint():
                 'video_duration': frames_list[-1]['timestamp'] if frames_list else 0
             }
             
+            # ===== ADD TO ALERT HISTORY =====
+            # Create alert entry from video analysis results for dashboard
+            alert_id = len(alerts) + 1
+            alert_entry = {
+                'alert_id': alert_id,
+                'risk_score': final_risk_score_100,
+                'danger_rank': danger_rank,
+                'danger_tier': danger_tier,
+                'escalation_probability': heuristic_risk_result['escalation_probability'],
+                'confidence': float(max(domain_probabilities.values())) if domain_probabilities else 0.25,
+                'domain': primary_domain,
+                'triggered_signals': heuristic_risk_result['triggered_signals'],
+                'timestamp': datetime.utcnow().isoformat() + "Z",
+            }
+            alerts.append(alert_entry)
+            purge_old_alerts()
+            
             return jsonify(response), 200
         
         finally:

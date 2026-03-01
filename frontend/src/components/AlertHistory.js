@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * AlertHistory Component
  * 
- * Displays a table of recent alerts with their scores, ranks, and triggered signals.
+ * Displays a table of recent alerts with their scores, ranks, and safety domains.
  * Alerts are automatically purged server-side after 15 minutes.
  */
 function AlertHistory({ alerts, domain, onClearAlerts }) {
@@ -16,6 +16,41 @@ function AlertHistory({ alerts, domain, onClearAlerts }) {
     };
     return rankMap[dangerRank] || 'green';
   };
+
+  const getDomainLabel = (domainId) => {
+    const labels = {
+      // New domain IDs (from updated backend)
+      child_safety: 'Child Safety',
+      elder_safety: 'Elder Safety',
+      environmental_hazard: 'Environmental Hazard',
+      crime: 'Crime',
+      // Legacy domain IDs (for backward compatibility)
+      elder_care: 'Elder Safety',
+      environmental: 'Environmental Hazard',
+      crime_prevention: 'Crime',
+    };
+    return labels[domainId] || domainId;
+  };
+
+  const getDomainEmoji = (domainId) => {
+    const emojis = {
+      // New domain IDs
+      child_safety: '👧',
+      elder_safety: '👴',
+      environmental_hazard: '🏠',
+      crime: '🚔',
+      // Legacy domain IDs
+      elder_care: '👴',
+      environmental: '🏠',
+      crime_prevention: '🚔',
+    };
+    return emojis[domainId] || '🎯';
+  };
+
+  // Sort alerts by timestamp descending (most recent first)
+  const sortedAlerts = [...alerts].sort((a, b) => 
+    new Date(b.timestamp) - new Date(a.timestamp)
+  );
 
   return (
     <div className="card alert-history">
@@ -52,32 +87,26 @@ function AlertHistory({ alerts, domain, onClearAlerts }) {
               <th>CRI Score</th>
               <th>Status</th>
               <th>Escalation</th>
-              <th>Signals</th>
+              <th>Safety Domain</th>
             </tr>
           </thead>
           <tbody>
-            {alerts.map((alert) => (
+            {sortedAlerts.map((alert) => (
               <tr key={alert.alert_id}>
                 <td style={{ fontSize: '0.85rem' }}>
                   {new Date(alert.timestamp).toLocaleTimeString()}
                 </td>
                 <td style={{ fontWeight: '600' }}>
-                  {alert.risk_score}
+                  {Math.round(alert.risk_score)}
                 </td>
                 <td>
                   <span className={`badge-inline ${getBadgeClass(alert.danger_rank)}`}>
                     {alert.danger_rank}
                   </span>
                 </td>
-                <td>{alert.escalation_probability}%</td>
-                <td style={{ maxWidth: '150px' }}>
-                  {alert.triggered_signals.length > 0 ? (
-                    <span title={alert.triggered_signals.join(', ')}>
-                      {alert.triggered_signals.length} signal{alert.triggered_signals.length !== 1 ? 's' : ''}
-                    </span>
-                  ) : (
-                    <span style={{ color: '#9ca3af' }}>None</span>
-                  )}
+                <td>{parseFloat(alert.escalation_probability).toFixed(1)}%</td>
+                <td>
+                  {getDomainEmoji(alert.domain)} {getDomainLabel(alert.domain)}
                 </td>
               </tr>
             ))}

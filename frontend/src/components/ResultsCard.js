@@ -38,7 +38,7 @@ function ResultsCard({ result, domain }) {
 
       <div className="cri-score">{result.risk_score}</div>
       <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem' }}>
-        Child Risk Index (CRI)
+        Crisis Risk Index (CRI)
       </p>
 
       <div className={`danger-badge ${getBadgeClass(result.danger_rank)}`}>

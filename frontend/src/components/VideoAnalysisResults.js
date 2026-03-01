@@ -7,20 +7,30 @@ export default function VideoAnalysisResults({ result }) {
 
   const getDomainEmoji = (domainId) => {
     const emojis = {
+      // New domain IDs
       child_safety: '👧',
       elder_safety: '👴',
       environmental_hazard: '🏠',
       crime: '🚔',
+      // Legacy domain IDs
+      elder_care: '👴',
+      environmental: '🏠',
+      crime_prevention: '🚔',
     };
     return emojis[domainId] || '🎯';
   };
 
   const getDomainLabel = (domainId) => {
     const labels = {
+      // New domain IDs
       child_safety: 'Child Safety',
       elder_safety: 'Elder Safety',
       environmental_hazard: 'Environmental Hazard',
       crime: 'Crime',
+      // Legacy domain IDs
+      elder_care: 'Elder Safety',
+      environmental: 'Environmental Hazard',
+      crime_prevention: 'Crime',
     };
     return labels[domainId] || domainId;
   };

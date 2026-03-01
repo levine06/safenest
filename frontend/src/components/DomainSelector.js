@@ -5,7 +5,7 @@ import { getAllDomains } from '../config/domains';
  * DomainSelector Component
  * 
  * Allows users to switch between different safety monitoring domains
- * (Child Safety, Elder Care, Environmental Hazards, Crime Prevention)
+ * (Child Safety, Elder Safety, Environmental Hazard, Crime)
  */
 function DomainSelector({ selectedDomain, onDomainChange, currentDomainInfo }) {
   const domains = getAllDomains();

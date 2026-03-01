@@ -8,7 +8,7 @@
 export const SAFETY_DOMAINS = {
   CHILD_SAFETY: {
     id: 'child_safety',
-    label: '👧 Child Safety',
+    label: 'Child Safety',
     emoji: '👧',
     description: 'Detect risks to children in public spaces',
     signals: [
@@ -20,9 +20,9 @@ export const SAFETY_DOMAINS = {
       { key: 'after_school_hours', label: 'After School Hours', weight: 10 },
     ],
   },
-  ELDER_CARE: {
-    id: 'elder_care',
-    label: '👴 Elder Care',
+  ELDER_SAFETY: {
+    id: 'elder_safety',
+    label: 'Elder Safety',
     emoji: '👴',
     description: 'Monitor elderly persons for health & safety risks',
     signals: [
@@ -34,9 +34,9 @@ export const SAFETY_DOMAINS = {
       { key: 'isolation_risk', label: 'High Isolation Risk', weight: 25 },
     ],
   },
-  ENVIRONMENTAL: {
-    id: 'environmental',
-    label: '🏠 Environmental Hazards',
+  ENVIRONMENTAL_HAZARD: {
+    id: 'environmental_hazard',
+    label: 'Environmental Hazard',
     emoji: '🏠',
     description: 'Detect environmental risks (fire, flooding, hazmat)',
     signals: [
@@ -48,9 +48,9 @@ export const SAFETY_DOMAINS = {
       { key: 'power_outage', label: 'Power Outage', weight: 20 },
     ],
   },
-  CRIME_PREVENTION: {
-    id: 'crime_prevention',
-    label: '🚔 Crime Prevention',
+  CRIME: {
+    id: 'crime',
+    label: 'Crime',
     emoji: '🚔',
     description: 'Detect suspicious activity & crime risk indicators',
     signals: [
