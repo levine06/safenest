@@ -71,7 +71,8 @@ try:
     signal_features = generate_signal_features(frame_analysis)
     print(f"   Signals generated: {len(signal_features)} signals")
     for signal, score in signal_features.items():
-        if score > 0.1:
+        # only print numeric scores
+        if isinstance(score, (int, float)) and score > 0.1:
             print(f"      - {signal}: {score:.2f}")
     
     print("\n5️⃣ Classifying domain...")

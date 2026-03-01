@@ -301,10 +301,16 @@ def analyze_video_endpoint():
                 
                 # Generate signal features for this frame
                 signal_features = generate_signal_features(frame_analysis)
-                
+
                 # Aggregate all signals (keep max confidence score per signal)
+                # Some features such as GPT hazard_type are strings and should be ignored
                 for signal, score in signal_features.items():
-                    all_signal_features[signal] = max(all_signal_features.get(signal, 0), score)
+                    if isinstance(score, (int, float)):
+                        all_signal_features[signal] = max(all_signal_features.get(signal, 0), score)
+                    else:
+                        # keep non-numeric values out of the numeric aggregation
+                        # they may still be returned in the full response if needed
+                        continue
                 
                 # Domain classification for this frame
                 frame_domain = classify_domain_from_signals(

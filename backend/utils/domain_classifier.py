@@ -118,7 +118,8 @@ def generate_classification_reasoning(signal_features, primary_domain):
     # Analyze which signals contributed most
     top_signals = []
     for signal, score in signal_features.items():
-        if score > 0.3:
+        # only consider numeric scores when reasoning
+        if isinstance(score, (int, float)) and score > 0.3:
             top_signals.append((signal, score))
     
     top_signals.sort(key=lambda x: x[1], reverse=True)
@@ -169,10 +170,14 @@ def signals_to_boolean_dict(signal_features, threshold=0.3):
     Returns:
         dict: Boolean signals for risk scoring
     """
-    return {
-        signal: (score > threshold)
-        for signal, score in signal_features.items()
-    }
+    boolean_signals = {}
+    for signal, score in signal_features.items():
+        if isinstance(score, (int, float)):
+            boolean_signals[signal] = score > threshold
+        else:
+            # Non-numeric values cannot trigger a signal
+            boolean_signals[signal] = False
+    return boolean_signals
 
 
 def get_signal_confidence_scores(signal_features):
@@ -187,6 +192,9 @@ def get_signal_confidence_scores(signal_features):
     """
     normalized = {}
     for signal, score in signal_features.items():
-        normalized[signal] = min(1.0, score)
+        if isinstance(score, (int, float)):
+            normalized[signal] = min(1.0, score)
+        else:
+            normalized[signal] = 0.0
     
     return normalized
