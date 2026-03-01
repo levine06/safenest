@@ -7,16 +7,29 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import sgMap from '../assets/sg.svg';
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend);
 
-// Simulated geographic grid (5x5 zones)
-const ZONES = Array.from({ length: 25 }, (_, i) => ({
-  id: i,
-  x: (i % 5) * 100 + 50,
-  y: Math.floor(i / 5) * 100 + 50,
-  name: `Zone ${String.fromCharCode(65 + Math.floor(i / 5))}-${(i % 5) + 1}`,
-}));
+// Singapore regions with realistic coordinates
+// Coordinates normalized to 0-700 range for visualization
+const SINGAPORE_ZONES = [
+  { id: 0, x: 200, y: 550, name: 'West Coast Marina', region: 'West' },
+  { id: 1, x: 280, y: 520, name: 'Bukit Timah', region: 'Northwest' },
+  { id: 2, x: 350, y: 530, name: 'Orchard Road', region: 'Central' },
+  { id: 3, x: 420, y: 540, name: 'Marina Bay', region: 'Southeast' },
+  { id: 4, x: 480, y: 550, name: 'Sentosa Island', region: 'South' },
+  { id: 5, x: 150, y: 450, name: 'Kranji Reservoir', region: 'North' },
+  { id: 6, x: 280, y: 420, name: 'Ang Mo Kio', region: 'Northeast' },
+  { id: 7, x: 380, y: 430, name: 'Bedok', region: 'East' },
+  { id: 8, x: 460, y: 450, name: 'Changi Airport', region: 'Northeast' },
+  { id: 9, x: 320, y: 350, name: 'Tampines', region: 'East' },
+  { id: 10, x: 240, y: 300, name: 'Serangoon', region: 'Northeast' },
+  { id: 11, x: 400, y: 320, name: 'Pasir Ris', region: 'East' },
+  { id: 12, x: 180, y: 520, name: 'Jurong', region: 'West' },
+  { id: 13, x: 350, y: 380, name: 'Geylang', region: 'East Central' },
+  { id: 14, x: 300, y: 480, name: 'Tiong Bahru', region: 'South' },
+];
 
 // Deterministic zone assignment based on alert fingerprint
 const getZoneForAlert = (alert) => {
@@ -29,8 +42,8 @@ const getZoneForAlert = (alert) => {
   const hash = Math.abs((seed * 9301 + 49297) % 233280);
   
   // Always assigns same alert to same zone (stable across re-renders)
-  const zoneIndex = hash % ZONES.length;
-  return ZONES[zoneIndex];
+  const zoneIndex = hash % SINGAPORE_ZONES.length;
+  return SINGAPORE_ZONES[zoneIndex];
 };
 
 // Get color based on danger tier
@@ -42,6 +55,39 @@ const getDangerColorFromRank = (rank) => {
     'Red': '#dc2626',
   };
   return colors[rank] || '#9ca3af';
+};
+
+// Island bounds as percentage of chart area
+// Constrains points to visible Singapore island region
+const ISLAND_BOUNDS = {
+  xMin: 0.18,
+  xMax: 0.92,
+  yMin: 0.12,
+  yMax: 0.88,
+};
+
+// Chart axis ranges
+const CHART_X_MIN = 100;
+const CHART_X_MAX = 550;
+const CHART_Y_MIN = 250;
+const CHART_Y_MAX = 600;
+
+// Map zone coordinates to chart space, constrained to island bounds
+const mapZoneToChart = (zoneX, zoneY) => {
+  // Zone coordinates are in 0-700 normalized space
+  // Normalize to 0-1
+  const normX = zoneX / 700;
+  const normY = zoneY / 700;
+  
+  // Clamp to island bounds
+  const clampedX = Math.max(ISLAND_BOUNDS.xMin, Math.min(ISLAND_BOUNDS.xMax, normX));
+  const clampedY = Math.max(ISLAND_BOUNDS.yMin, Math.min(ISLAND_BOUNDS.yMax, normY));
+  
+  // Map to chart coordinates
+  const chartX = CHART_X_MIN + clampedX * (CHART_X_MAX - CHART_X_MIN);
+  const chartY = CHART_Y_MIN + clampedY * (CHART_Y_MAX - CHART_Y_MIN);
+  
+  return { chartX, chartY };
 };
 
 
@@ -102,19 +148,23 @@ export default function HeatMap({ alerts }) {
 
       return {
         label: `${rank} Zone (${zonesForTier.length} zones)`,
-        data: zonesForTier.map((z) => ({
-          x: z.zone.x,
-          y: z.zone.y,
-          r: Math.max(8, Math.min(25, z.alerts.length * 3)),
-          zone: z.zone.name,
-          alertCount: z.alerts.length,
-          avgRisk: Math.round(z.avgRisk),
-          maxRisk: z.maxRisk,
-        })),
+        data: zonesForTier.map((z) => {
+          const { chartX, chartY } = mapZoneToChart(z.zone.x, z.zone.y);
+          return {
+            x: chartX,
+            y: chartY,
+            r: Math.max(10, Math.min(30, z.alerts.length * 4)),
+            zone: z.zone.name,
+            region: z.zone.region,
+            alertCount: z.alerts.length,
+            avgRisk: Math.round(z.avgRisk),
+            maxRisk: z.maxRisk,
+          };
+        }),
         backgroundColor: getDangerColorFromRank(rank),
-        borderColor: getDangerColorFromRank(rank),
-        borderWidth: 2,
-        opacity: 0.7,
+        borderColor: '#ffffff',
+        borderWidth: 2.5,
+        opacity: 0.8,
       };
     });
 
@@ -141,7 +191,8 @@ export default function HeatMap({ alerts }) {
           label: (context) => {
             const data = context.raw;
             return [
-              `${data.zone}`,
+              `📍 ${data.zone}`,
+              `Region: ${data.region}`,
               `Alerts: ${data.alertCount}`,
               `Avg Risk: ${data.avgRisk}`,
               `Max Risk: ${data.maxRisk}`,
@@ -149,7 +200,7 @@ export default function HeatMap({ alerts }) {
           },
           afterLabel: () => '',
         },
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
         padding: 12,
         titleFont: { size: 13, weight: 'bold' },
         bodyFont: { size: 12 },
@@ -161,24 +212,24 @@ export default function HeatMap({ alerts }) {
         position: 'bottom',
         title: {
           display: true,
-          text: 'Location (E-W)',
-          font: { weight: 'bold' },
+          text: '⬅️ West | East ➡️',
+          font: { weight: 'bold', size: 12 },
         },
-        min: 0,
-        max: 500,
+        min: 100,
+        max: 550,
         ticks: { display: false },
-        grid: { drawBorder: false, color: 'rgba(200, 200, 200, 0.1)' },
+        grid: { drawBorder: true, color: 'rgba(150, 150, 150, 0.15)' },
       },
       y: {
         title: {
           display: true,
-          text: 'Location (N-S)',
-          font: { weight: 'bold' },
+          text: '⬇️ South | North ⬆️',
+          font: { weight: 'bold', size: 12 },
         },
-        min: 0,
-        max: 500,
+        min: 250,
+        max: 600,
         ticks: { display: false },
-        grid: { drawBorder: false, color: 'rgba(200, 200, 200, 0.1)' },
+        grid: { drawBorder: true, color: 'rgba(150, 150, 150, 0.15)' },
       },
     },
   };
@@ -186,37 +237,42 @@ export default function HeatMap({ alerts }) {
   return (
     <div className="heat-map-card">
       <div className="card-header">
-        <h3>📍 Risk Heat Map - Situational Awareness</h3>
+        <h3>Singapore Risk Heat Map</h3>
         <p className="subtitle">
-          Geographic clustering of risk alerts • Bubble size = alert concentration • Color = danger tier
+          Real-time geographic risk distribution across Singapore Island • Bubble size = alert concentration
         </p>
       </div>
       <div className="heat-map-container">
+        <img 
+          src={sgMap} 
+          alt="Singapore Map"
+          className="sg-map-background"
+        />
         {alerts && alerts.length > 0 ? (
           <>
             <Bubble data={chartData} options={options} />
             <div className="heat-map-legend">
               <div className="legend-item">
                 <span className="legend-dot" style={{ backgroundColor: '#dc2626' }}></span>
-                <span>Critical Risk - Immediate Response</span>
+                <span>Critical</span>
               </div>
               <div className="legend-item">
                 <span className="legend-dot" style={{ backgroundColor: '#ef6b3f' }}></span>
-                <span>High Risk - Urgent Monitoring</span>
+                <span>High Risk</span>
               </div>
               <div className="legend-item">
                 <span className="legend-dot" style={{ backgroundColor: '#f59e0b' }}></span>
-                <span>Watch - Active Monitoring</span>
+                <span>Watch</span>
               </div>
               <div className="legend-item">
                 <span className="legend-dot" style={{ backgroundColor: '#10b981' }}></span>
-                <span>Safe - Normal Operations</span>
+                <span>Safe</span>
               </div>
             </div>
           </>
         ) : (
           <div className="empty-state">
-            <p>No alerts yet. Triggers an alert to see risk clustering.</p>
+            <p>No alerts yet. Generate an alert to see Singapore's risk distribution map.</p>
           </div>
         )}
       </div>
