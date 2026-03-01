@@ -11,6 +11,8 @@ This backend provides REST API endpoints for:
 All data is anonymized and alerts are auto-purged after 15 minutes
 to ensure privacy-by-design.
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS

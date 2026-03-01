@@ -22,6 +22,9 @@ except (ImportError, AttributeError):
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# Debug: print at import time whether key is loaded
+print("DEBUG signal_detector OPENAI_API_KEY set?", bool(OPENAI_API_KEY), flush=True)
+
 
 def detect_pose_and_hands(frame):
     """
@@ -428,7 +431,7 @@ def detect_crowd_panic(motion_intensity, faces_detected, crowd_density):
 
 def classify_with_gpt4mini(frame_analysis, frame_context=""):
     """
-    Use OpenAI GPT-4 Mini to classify video frames for crisis detection.
+    Use OpenAI gpt-4o-mini to classify video frames for crisis detection.
     
     Args:
         frame_analysis (dict): Frame analysis metrics
@@ -467,18 +470,14 @@ Classify the threat level and provide:
 Return ONLY valid JSON, no markdown."""
 
     try:
-        response = client.messages.create(
-            model="gpt-4-mini",
-            max_tokens=500,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+        # Use modern OpenAI SDK with responses.create (or chat.completions.create as fallback)
+        response = client.responses.create(
+            model="gpt-4o-mini",
+            input=prompt,
+            max_output_tokens=500,
         )
         
-        response_text = response.content[0].text
+        response_text = response.output_text
         
         # Parse JSON response
         result = json.loads(response_text)
@@ -491,7 +490,7 @@ Return ONLY valid JSON, no markdown."""
         }
     
     except Exception as e:
-        print(f"Error calling GPT-4 Mini: {e}")
+        print(f"Error calling OpenAI gpt-4o-mini: {repr(e)}", flush=True)
         return {
             'crisis_risk_index': 0.0,
             'hazard_type': 'classification_error',
