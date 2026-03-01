@@ -3,20 +3,22 @@
 
 SafeNest is a real-time public safety intelligence system that analyzes CCTV footage, extracts safety-relevant signals, classifies risk domains, and computes a Crisis Risk Index (CRI) to support early detection, situational awareness, and emergency response planning.
 
+👉 **Quickstart Guide:** See [QUICKSTART.md](./QUICKSTART.md) to run locally.
+
 ---
 
 ## 🚨 Problem Context
 
-Many communities face public safety challenges due to:
+Across many urban environments, CCTV infrastructure already exists — but most systems are passive. They record footage without actively interpreting risk in real time. As a result:
 
-- Limited surveillance coverage
-- Delayed emergency response
-- Fragmented monitoring systems
-- Low-quality or outdated infrastructure
+- Critical signals (e.g., child distress, elderly falls, fire outbreaks, violent motion) may go unnoticed.
+- Monitoring often depends on human operators manually watching multiple feeds.
+- Alerts are reactive rather than predictive.
+- Geographic risk patterns are not aggregated for strategic planning.
 
-Current systems often rely on manual reporting and reactive workflows, allowing incidents to escalate before intervention.
+Communities need a system that transforms raw surveillance footage into structured, actionable intelligence — without compromising privacy.
 
-There is a need for scalable, privacy-conscious, AI-powered systems that enable early detection and actionable response in diverse community environments.
+SafeNest addresses this gap by turning unstructured video into domain-specific risk assessments and geographic insights.
 
 ---
 
@@ -196,4 +198,3 @@ SafeNest demonstrates how AI-powered safety intelligence can:
 High-quality safety systems can be delivered effectively — and ethically.
 
 ---
-
