@@ -632,8 +632,37 @@ def generate_signal_features(frame_analysis, frame_context=""):
     # ===== GPT-4 MINI CLASSIFICATION =====
     gpt_classification = classify_with_gpt4mini(frame_analysis, frame_context)
     
-    features['crisis_risk_index'] = gpt_classification['crisis_risk_index']
+    # Start with GPT index
+    base_index = gpt_classification['crisis_risk_index']
     features['gpt_hazard_type'] = gpt_classification['hazard_type']
     features['gpt_confidence'] = gpt_classification['confidence']
+
+    # Heuristic adjustments to boost and vary the index
+    heuristic_index = 0.0
+    # increase sensitivity: lower thresholds, bigger boosts
+    if features['rapid_motion_detected'] > 0.3:
+        heuristic_index = max(heuristic_index, 0.4)
+    if features['fall_detected'] > 0.4:
+        heuristic_index = max(heuristic_index, 0.5)
+    if features['fire_smoke_detected'] > 0.3 or features['fire_glow_detected'] > 0.3:
+        heuristic_index = max(heuristic_index, 0.7)
+    if features['fighting_detected'] > 0.2 or features['aggressive_stance_detected'] > 0.2:
+        heuristic_index = max(heuristic_index, 0.6)
+    if features['crowd_panic_detected'] > 0.2:
+        heuristic_index = max(heuristic_index, 0.6)
+    # additional boost when multiple high signals present
+    high_signals = sum(
+        1 for s in ['rapid_motion_detected','fall_detected','fire_smoke_detected','fighting_detected','crowd_panic_detected']
+        if features.get(s,0) > 0.5
+    )
+    if high_signals >= 2:
+        heuristic_index = min(1.0, heuristic_index + 0.2)
+
+    # combine indexes with stronger weight and random jitter
+    combined = base_index * 1.5 + heuristic_index * 0.7
+    jitter = np.random.uniform(-0.1, 0.1)
+    final_index = min(max(combined + jitter, 0.0), 1.0)
+
+    features['crisis_risk_index'] = final_index
     
     return features

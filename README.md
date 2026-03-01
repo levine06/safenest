@@ -1,203 +1,29 @@
-# SafeNest 🏠
+# SafeNest
 
-**Privacy-Preserving Child Safety Risk Intelligence Web Dashboard**
+SafeNest is a small developer demo that analyzes anonymized safety signals from videos and surfaces a simple Crisis Risk Index (CRI). It includes:
 
-A hackathon prototype demonstrating how to build child safety monitoring systems with anonymity and privacy at the core.
+- a Flask backend (`backend/`) that exposes a JSON API for analysis
+- a React frontend (`frontend/`) for uploading videos and interacting with the demo
 
----
+This repository is intended for local development and demonstration purposes only.
 
-## 🎯 Overview
+See the quick start for rapid setup: [QUICKSTART.md](QUICKSTART.md)
 
-SafeNest simulates a child safety monitoring platform that computes a **Child Risk Index (CRI)** score (0–100) from multiple anonymized safety signals, classifies risks into danger tiers (Green/Yellow/Orange/Red), and maintains strict privacy-by-design principles.
-
-**Key Features:**
-- ✅ Signal-based risk scoring engine (backend)
-- ✅ Real-time risk analysis API (Flask)
-- ✅ Interactive dashboard (React)
-- ✅ Alert history with automatic 15-minute data purge
-- ✅ Privacy-first architecture (no personal data storage)
-- ✅ Clean, presentation-ready UI
-
----
-
-## 📁 Project Structure
+Project layout (top-level)
 
 ```
 safenest/
-├── backend/
-│   ├── app.py                 # Flask main app
-│   ├── requirements.txt        # Python dependencies
-│   └── utils/
-│       ├── __init__.py
-│       └── risk_scorer.py      # Risk scoring engine
-├── frontend/
-│   ├── package.json
-│   ├── public/
-│   │   └── index.html
-│   └── src/
-│       ├── App.js             # Main React component
-│       ├── App.css            # Styling
-│       ├── index.js
-│       ├── index.css
-│       └── components/
-│           ├── SignalSimulator.js      # Signal toggle switches
-│           ├── ResultsCard.js          # Risk results display
-│           ├── AlertHistory.js         # Alert history table
-│           └── PrivacyBanner.js        # Privacy explanation
-└── README.md                  # This file
+├─ backend/      # Flask API and Python utilities
+├─ frontend/     # React app
+├─ videos/       # sample/test videos
+├─ QUICKSTART.md
+└─ README.md
 ```
 
----
+License / notes
 
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js** (v14+) and **npm** for frontend
-- **Python** (v3.7+) for backend
-- Two terminal windows
-
----
-
-### Backend Setup
-
-1. **Open a terminal and navigate to the backend:**
-   ```bash
-   cd safenest/backend
-   ```
-
-2. **Create a virtual environment (optional but recommended):**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On macOS/Linux
-   # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the Flask server:**
-   ```bash
-   python app.py
-   ```
-
-   **Expected output:**
-   ```
-   🚀 SafeNest Backend starting on http://localhost:5000
-   ⏱️  Alert retention: 15 minutes
-   ✅ CORS enabled for frontend on http://localhost:3000
-   ```
-
-   The backend is now running on **http://localhost:5000**
-
----
-
-### Frontend Setup
-
-1. **Open a new terminal and navigate to the frontend:**
-   ```bash
-   cd safenest/frontend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server:**
-   ```bash
-   npm start
-   ```
-
-   Your browser should automatically open **http://localhost:3000**
-
----
-
-## 💡 How It Works
-
-### 1. Signal Simulator
-
-The dashboard displays 6 safety signals as toggle switches:
-
-- **Distress Scream Detected** - Audio signal indicating child distress
-- **Rapid Motion Detected** - Sudden movement (possible struggle)
-- **Child Stopped Moving** - Absence of motion (potential harm)
-- **Adult Loitering Detected** - Suspicious adult proximity
-- **Multiple Reports** - Multiple sources reporting same incident
-- **After School Hours** - Risk signal based on time of day
-
-Toggle any combination and click **"🚀 Analyze Risk"** to compute the CRI.
-
-### 2. Child Risk Index (CRI) Scoring
-
-The risk score calculation follows this algorithm:
-
-#### Step 1: Signal Weights
-Each triggered signal contributes points:
-
-| Signal | Weight | Rationale |
-|--------|--------|-----------|
-| Distress Scream | +45 | Strongest direct indication of distress |
-| Rapid Motion | +35 | Suggests struggle or panic |
-| Adult Loitering | +30 | Suspicious proximity |
-| Child Stopped Moving | +25 | Potential harm or capture |
-| Multiple Reports | +20 | Corroborating evidence |
-| After School Hours | +10 | Higher risk time window |
-
-#### Step 2: Confidence Factor
-Multiply the weighted sum by a confidence factor based on signal count:
-
-- **1 signal** → 0.6 (low confidence)
-- **2 signals** → 0.75 (moderate confidence)
-- **3+ signals** → 0.9 (high confidence)
-
-**Formula:**
-```
-risk_score = min(100, weighted_sum × confidence_factor)
-```
-
-**Example:**
-- Signals triggered: `distress_scream_detected=True`, `rapid_motion_detected=True`
-- Weighted sum: 45 + 35 = 80 points
-- Confidence: 0.75 (2 signals triggered)
-- Risk score: 80 × 0.75 = **60.0**
-
-#### Step 3: Danger Classification
-
-| Score Range | Color  | Tier | Action |
-|-------------|--------|------|--------|
-| 0–25 | 🟢 Green | Safe | No action needed |
-| 26–50 | 🟡 Yellow | Watch | Monitor situation |
-| 51–75 | 🟠 Orange | High Risk | Immediate intervention needed |
-| 76–100 | 🔴 Red | Critical | Emergency response |
-
-### 3. Escalation Probability
-
-A separate "escalation probability" indicates likelihood of situation worsening:
-
-- **Base:** 20%
-- **Add:** +25% if distress scream, +20% if rapid motion, +15% if adult loitering, +10% if multiple reports, +10% if after school hours
-- **Cap:** 100%
-
-This helps prioritize cases for human review.
-
----
-
-## 🔒 Privacy & Anonymity by Design
-
-SafeNest emphasizes **privacy-first architecture**:
-
-### What is NOT Stored
-- ❌ Names, faces, or identifiable information
-- ❌ Video/audio feeds
-- ❌ Location data
-- ❌ Device IDs or personal metadata
-- ❌ Facial recognition results
-
-### What IS Stored (Temporarily)
-- ✅ Boolean signal states (anonymous)
-- ✅ Computed risk scores
+- This is a prototype; do not use for real monitoring without appropriate safeguards.
+- For detailed developer notes and examples, open `backend/` and `frontend/` folders.
 - ✅ Risk classifications (danger tier)
 - ✅ Timestamps
 - ✅ Escalation probabilities
