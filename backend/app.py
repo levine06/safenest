@@ -17,7 +17,7 @@ load_dotenv()
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta, timezone
-from utils.risk_scorer import analyze_risk
+from utils.risk_scorer import analyze_risk, get_danger_rank
 from utils.video_processor import extract_frames, detect_motion, detect_faces, detect_people_count, get_frame_brightness, detect_fire_smoke, detect_color_anomaly, detect_crowd_density_zones, cleanup_video
 from utils.signal_detector import detect_pose_and_hands, detect_fall, detect_rapid_motion_pose, detect_aggressive_stance, detect_contact_and_fighting, detect_crowd_panic, generate_signal_features
 from utils.domain_classifier import classify_domain_from_signals, signals_to_boolean_dict
@@ -388,6 +388,7 @@ def analyze_video_endpoint():
                 gpt_severity = heuristic_risk_score
             
             # ===== RISK SCORE CALIBRATION =====
+            # Internal scale: 0-1
             # final_risk_score = clamp(max(heuristic_risk, 0.6*gpt_severity + 0.4*heuristic_risk), 0, 1)
             calibrated_risk = 0.6 * gpt_severity + 0.4 * heuristic_risk_score
             final_risk_score = max(heuristic_risk_score, calibrated_risk)
@@ -403,20 +404,24 @@ def analyze_video_endpoint():
                     'reasons': kf['reasons']
                 })
             
+            # Convert final_risk_score from 0-1 to 0-100 scale for API response
+            final_risk_score_100 = final_risk_score * 100.0
+            danger_rank, danger_tier = get_danger_rank(final_risk_score_100)
+            
             response = {
                 'status': 'success',
                 'primary_domain': primary_domain,
                 'domain_probabilities': domain_probabilities,
                 'domain_confidence': float(max(domain_probabilities.values())) if domain_probabilities else 0.25,
-                'gpt_severity': float(gpt_severity),
-                'heuristic_risk_score': float(heuristic_risk_score),
-                'final_risk_score': float(final_risk_score),
-                'risk_score': float(final_risk_score),  # For UI compatibility
+                'gpt_severity': float(gpt_severity),  # Internal 0-1 scale
+                'heuristic_risk_score': float(heuristic_risk_score),  # Internal 0-1 scale
+                'final_risk_score': final_risk_score_100,  # UI scale 0-100
+                'risk_score': final_risk_score_100,  # UI scale 0-100 (Crisis Risk Index)
                 'keyframes_used': keyframes_used,
                 'gpt_used': gpt_used,
                 'signals_detected': {k: float(v) for k, v in all_signal_features.items() if isinstance(v, (int, float))},
-                'danger_rank': heuristic_risk_result['danger_rank'],
-                'danger_tier': heuristic_risk_result['danger_tier'],
+                'danger_rank': danger_rank,
+                'danger_tier': danger_tier,
                 'escalation_probability': heuristic_risk_result['escalation_probability'],
                 'triggered_signals': heuristic_risk_result['triggered_signals'],
                 'reasoning': gpt_result.get('reasoning', heuristic_domain['reasoning']),

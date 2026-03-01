@@ -484,9 +484,9 @@ RESPOND WITH VALID JSON ONLY (no markdown, no explanation):
             'reasoning': 'Failed to encode keyframes'
         }
     
-    # Call GPT-4o-mini with vision
+    # Call GPT-4o-mini with vision (OpenAI API)
     try:
-        response = client.messages.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=500,
             messages=[
@@ -497,8 +497,8 @@ RESPOND WITH VALID JSON ONLY (no markdown, no explanation):
             ]
         )
         
-        # Extract response text
-        response_text = response.content[0].text
+        # Extract response text (OpenAI format)
+        response_text = response.choices[0].message.content
         
         # Parse JSON with retries
         result = None
