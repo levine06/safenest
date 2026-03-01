@@ -1,13 +1,11 @@
 # SafeNest
 
-SafeNest is a small developer demo that analyzes anonymized safety signals from videos and surfaces a simple Crisis Risk Index (CRI). It includes:
+SafeNest is a small developer demo that analyzes anonymized safety signals from CCTV-style video and classifies footage into one or more safety domains (for example: `child_safety`, `elderly_safety`, `environmental_hazards`, `crime`). For each classified domain it computes a domain-specific Crisis Risk Index (CRI) — a transparent, rule-based risk score used to rank and triage incidents.
 
-- a Flask backend (`backend/`) that exposes a JSON API for analysis
+- a Flask backend (`backend/`) that exposes a JSON API for analysis and optional domain classification
 - a React frontend (`frontend/`) for uploading videos and interacting with the demo
 
-This repository is intended for local development and demonstration purposes only.
-
-See the quick start for rapid setup: [QUICKSTART.md](QUICKSTART.md)
+This repository is intended for local development and demonstration purposes only. See the quick start for rapid setup: [QUICKSTART.md](QUICKSTART.md)
 
 Project layout (top-level)
 
@@ -41,35 +39,37 @@ This is a **simulation prototype**—in production, additional safeguards (encry
 
 ### `POST /analyze-risk`
 
-Analyze safety signals and compute risk score.
+Analyze safety signals, optionally include or request domain classification, and compute a domain-specific risk score.
 
-**Request:**
+**Request (minimal):**
 ```json
 {
+  "domain": "crime",                
   "signals": {
-    "distress_scream_detected": true,
+    "distress_audio_detected": true,
     "rapid_motion_detected": true,
-    "child_stopped_moving": false,
-    "adult_loitering_detected": true,
+    "stationary_person_detected": false,
+    "loitering_detected": true,
     "multiple_reports": false,
-    "after_school_hours": true
+    "smoke_or_fire_detected": false
   },
-  "context": {}
+  "context": {
+    "camera_id": "cam-123",
+    "timestamp": "2026-03-01T14:32:00Z"
+  }
 }
 ```
+
+The `domain` field may be provided by the client or omitted to let the backend infer one or more domains from the signals and context.
 
 **Response:**
 ```json
 {
+  "domain": "crime",
   "risk_score": 75.5,
   "danger_rank": "Orange",
   "danger_tier": "High Risk",
-  "triggered_signals": [
-    "distress_scream_detected",
-    "rapid_motion_detected",
-    "adult_loitering_detected",
-    "after_school_hours"
-  ],
+  "triggered_signals": ["distress_audio_detected","rapid_motion_detected","loitering_detected"],
   "escalation_probability": 90,
   "confidence": 0.9,
   "timestamp": "2026-03-01T14:32:15.123456Z",
@@ -135,10 +135,10 @@ Escalation: 30%
 
 ### Example 3: High Alert
 ```
-Signals: 
-  - distress_scream_detected=ON (+45)
+Signals (example domain=crime):
+  - distress_audio_detected=ON (+45)
   - rapid_motion_detected=ON (+35)
-  - adult_loitering_detected=ON (+30)
+  - loitering_detected=ON (+30)
   - multiple_reports=ON (+20)
 
 Weighted Sum: 45+35+30+20 = 130
@@ -197,7 +197,7 @@ python -c "from utils.risk_scorer import analyze_risk; result = analyze_risk({'d
 
 - **Privacy-First:** This prototype emphasizes anonymity at every layer. No biometric data, faces, or IDs.
 - **Explainability:** Risk scoring uses transparent, rule-based logic—not ML black boxes.
-- **Responsible Design:** Demonstrates how to build safety tools responsibly, especially for vulnerable populations (children).
+-- **Responsible Design:** Demonstrates how to build safety tools responsibly for public safety domains (children, elderly, environmental hazards, crime), and includes privacy-preserving defaults.
 - **Extensibility:** The risk scoring engine can be enhanced with additional signals, weights, or smarter confidence factors.
 - **Simulation Only:** This is a proof-of-concept. Real deployments would require legal review, consent frameworks, and audit logging.
 
@@ -244,4 +244,4 @@ Questions? Check the code comments or review the risk scoring logic in `backend/
 
 ---
 
-**Built with ❤️ for child safety and privacy.**
+**Built with ❤️ for public safety and privacy.**

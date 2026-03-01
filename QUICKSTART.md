@@ -31,12 +31,39 @@ The React dev server runs at http://localhost:3000 and will connect to the backe
 
 Quick API examples
 
-Analyze signals (POST /analyze-risk):
+Analyze signals (POST /analyze-risk). Include `domain` or omit to let the backend infer it:
 
 ```bash
 curl -X POST http://localhost:5000/analyze-risk \
   -H "Content-Type: application/json" \
-  -d '{"signals": {"distress_scream_detected": true}}'
+  -d '{
+    "domain": "crime",
+    "signals": {
+      "distress_audio_detected": true,
+      "rapid_motion_detected": true,
+      "stationary_person_detected": false,
+      "loitering_detected": true,
+      "multiple_reports": false,
+      "smoke_or_fire_detected": false
+    },
+    "context": {"camera_id": "cam-123"}
+  }'
+```
+
+Expected (example) response:
+
+```json
+{
+  "domain": "crime",
+  "risk_score": 75.5,
+  "danger_rank": "Orange",
+  "danger_tier": "High Risk",
+  "triggered_signals": ["distress_audio_detected","rapid_motion_detected","loitering_detected"],
+  "escalation_probability": 90,
+  "confidence": 0.9,
+  "timestamp": "2026-03-01T14:32:15.123456Z",
+  "alert_id": 1
+}
 ```
 
 Get recent alerts (GET /alerts):
