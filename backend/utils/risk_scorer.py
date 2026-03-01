@@ -78,11 +78,17 @@ def calculate_escalation_probability(signals: Dict[str, bool], escalation_bonuse
         Escalation probability as percentage (0-100)
     """
     probability = base
-    
-    for signal_name, is_triggered in signals.items():
-        if is_triggered and signal_name in escalation_bonuses:
-            probability += escalation_bonuses[signal_name]
-    
+
+    # Signals may be boolean or numeric (0..1). Treat numeric as proportional contribution.
+    for signal_name, val in signals.items():
+        if signal_name in escalation_bonuses:
+            try:
+                # numeric contribution
+                contrib = float(val)
+            except Exception:
+                contrib = 1.0 if bool(val) else 0.0
+            probability += escalation_bonuses[signal_name] * max(0.0, min(1.0, contrib))
+
     # Cap at 100%
     return min(probability, 100)
 
@@ -154,32 +160,38 @@ def analyze_risk(signals: Dict[str, bool], domain: str = 'child_safety', context
     escalation_bonuses = {k: int(v * 0.5) for k, v in signal_weights.items()}
     escalation_base = 20  # Start at 20%
     
-    # Identify which signals are triggered
-    triggered_signals = [
-        signal_name
-        for signal_name, is_triggered in signals.items()
-        if is_triggered and signal_name in signal_weights
-    ]
-    
-    # Calculate weighted sum from triggered signals
+    # Signals may be boolean or numeric (0..1). Convert to numeric values 0..1.
+    signal_values = {}
+    for s, v in signals.items():
+        if isinstance(v, bool):
+            signal_values[s] = 1.0 if v else 0.0
+        else:
+            try:
+                signal_values[s] = max(0.0, min(1.0, float(v)))
+            except Exception:
+                signal_values[s] = 0.0
+
+    # Calculate weighted contributions (weight * confidence) per signal
     signal_contributions = {
-        signal: signal_weights[signal] for signal in triggered_signals
+        s: signal_weights[s] * signal_values.get(s, 0.0)
+        for s in signal_weights.keys()
+        if signal_values.get(s, 0.0) > 0
     }
     weighted_sum = sum(signal_contributions.values())
-    
-    # Determine confidence factor based on number of signals
-    num_signals = len(triggered_signals)
+
+    # Determine confidence factor based on number of sufficiently-strong signals
+    num_signals = sum(1 for v in signal_values.values() if v > 0.1)
     confidence_factor = calculate_confidence_factor(num_signals)
-    
-    # Calculate final risk score
+
+    # Calculate final risk score (use weighted sum scaled by confidence)
     raw_score = weighted_sum * confidence_factor
     risk_score = min(max(raw_score, 0), 100)  # Clamp to [0, 100]
     
     # Determine danger rank
     danger_color, danger_tier = get_danger_rank(risk_score)
     
-    # Calculate escalation probability
-    escalation_probability = calculate_escalation_probability(signals, escalation_bonuses, escalation_base)
+    # Calculate escalation probability (scale bonuses by numeric signal value when available)
+    escalation_probability = calculate_escalation_probability(signal_values, escalation_bonuses, escalation_base)
     
     # Build detailed rationale
     rationale = build_rationale(
@@ -190,7 +202,9 @@ def analyze_risk(signals: Dict[str, bool], domain: str = 'child_safety', context
         raw_score,
         risk_score
     )
-    
+    # Determine list of triggered signals (by numeric threshold)
+    triggered_signals = [s for s, v in signal_values.items() if v > 0.1 and s in signal_weights]
+
     return {
         "risk_score": round(risk_score, 2),
         "danger_rank": danger_color,
