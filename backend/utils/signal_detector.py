@@ -7,8 +7,6 @@ Uses lightweight computer vision to detect safety signals from video frames.
 import numpy as np
 import cv2
 import os
-import json
-from openai import OpenAI
 
 try:
     import mediapipe as mp
@@ -17,13 +15,6 @@ try:
 except (ImportError, AttributeError):
     MP_AVAILABLE = False
     mp_holistic = None
-
-# Initialize OpenAI client
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-
-# Debug: print at import time whether key is loaded
-print("DEBUG signal_detector OPENAI_API_KEY set?", bool(OPENAI_API_KEY), flush=True)
 
 
 def detect_pose_and_hands(frame):
@@ -429,102 +420,19 @@ def detect_crowd_panic(motion_intensity, faces_detected, crowd_density):
     }
 
 
-def classify_with_gpt4mini(frame_analysis, frame_context=""):
-    """
-    Use OpenAI gpt-4o-mini to classify video frames for crisis detection.
-    
-    Args:
-        frame_analysis (dict): Frame analysis metrics
-        frame_context (str): Optional description of what's happening in the frame
-    
-    Returns:
-        dict: {
-            'crisis_risk_index': float (0-1),
-            'hazard_type': str,
-            'confidence': float (0-1),
-            'reasoning': str
-        }
-    """
-    if not client:
-        return {
-            'crisis_risk_index': 0.0,
-            'hazard_type': 'unknown',
-            'confidence': 0.0,
-            'reasoning': 'OpenAI API key not configured'
-        }
-    
-    # Build detailed prompt with frame analysis
-    prompt = f"""Analyze this video frame for safety threats and crises. Return a JSON response.
-
-FRAME ANALYSIS DATA:
-{format_frame_analysis_for_gpt(frame_analysis)}
-
-CONTEXT: {frame_context if frame_context else 'General surveillance footage'}
-
-Classify the threat level and provide:
-1. crisis_risk_index: 0-1 (0=safe, 1=critical emergency)
-2. hazard_type: Primary threat category (violence, fire, medical_emergency, crowd_panic, robbery, accident, none, etc.)
-3. confidence: 0-1 confidence in your assessment
-4. reasoning: Brief explanation
-
-Return ONLY valid JSON, no markdown."""
-
-    try:
-        # Use modern OpenAI SDK with responses.create (or chat.completions.create as fallback)
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            input=prompt,
-            max_output_tokens=500,
-        )
-        
-        response_text = response.output_text
-        
-        # Parse JSON response
-        result = json.loads(response_text)
-        
-        return {
-            'crisis_risk_index': float(result.get('crisis_risk_index', 0.0)),
-            'hazard_type': str(result.get('hazard_type', 'unknown')),
-            'confidence': float(result.get('confidence', 0.0)),
-            'reasoning': str(result.get('reasoning', ''))
-        }
-    
-    except Exception as e:
-        print(f"Error calling OpenAI gpt-4o-mini: {repr(e)}", flush=True)
-        return {
-            'crisis_risk_index': 0.0,
-            'hazard_type': 'classification_error',
-            'confidence': 0.0,
-            'reasoning': f'API error: {str(e)}'
-        }
-
-
-def format_frame_analysis_for_gpt(frame_analysis):
-    """Format frame analysis metrics as readable text for GPT-4 Mini."""
-    return f"""- Motion Intensity: {frame_analysis.get('rapid_motion_intensity', 0):.2f}
-- Fall Detected: {frame_analysis.get('fall_detected', False)}
-- Aggressive Stance: {frame_analysis.get('aggressive_stance_probability', 0):.2f}
-- Fighting Probability: {frame_analysis.get('fighting_probability', 0):.2f}
-- People Count: {frame_analysis.get('people_count', 0)}
-- Crowd Density: {frame_analysis.get('crowd_density', 0):.2f}
-- Crowd Panic: {frame_analysis.get('crowd_panic_probability', 0):.2f}
-- Fire/Smoke: {frame_analysis.get('fire_smoke_probability', 0):.2f}
-- Brightness: {frame_analysis.get('brightness', 1.0):.2f}
-- Motion Areas: {frame_analysis.get('motion_areas', 0)}
-"""
-
-
 def generate_signal_features(frame_analysis, frame_context=""):
     """
-    Convert frame analysis metrics to signal feature dictionary.
-    NOW INCLUDES GPT-4 MINI CLASSIFICATION.
+    Convert frame analysis metrics to signal feature dictionary (heuristic-only).
+    
+    Per-frame GPT classification has been removed. Vision-based classification
+    now happens once per video at the end using vision_classifier.py.
     
     Args:
         frame_analysis (dict): Frame analysis with pose, motion, etc.
-        frame_context (str): Optional video context for GPT-4 Mini
+        frame_context (str): Optional context (unused, kept for backwards compatibility)
     
     Returns:
-        dict: Signal feature scores (0-1 for each signal type) + crisis risk assessment
+        dict: Signal feature scores (0-1 for each signal type)
     """
     features = {
         # Original signals
@@ -543,13 +451,9 @@ def generate_signal_features(frame_analysis, frame_context=""):
         'crowd_panic_detected': 0.0,
         'people_falling_detected': 0.0,
         'fire_glow_detected': 0.0,
-        # NEW: GPT-4 Mini Classification
-        'crisis_risk_index': 0.0,
-        'gpt_hazard_type': 'none',
-        'gpt_confidence': 0.0,
     }
     
-    # ===== ORIGINAL SIGNALS =====
+    # ===== HEURISTIC SIGNALS =====
     
     # Rapid motion signal - more sensitive
     motion_intensity = frame_analysis.get('rapid_motion_intensity', 0)
@@ -585,7 +489,7 @@ def generate_signal_features(frame_analysis, frame_context=""):
     if brightness < 0.3:
         features['weapon_detected'] = min(1.0, features['weapon_detected'] + 0.35)
     
-    # ===== NEW CCTV SIGNALS =====
+    # ===== CCTV-SPECIFIC SIGNALS =====
     
     # Fire/Smoke detection from color analysis
     fire_smoke_prob = frame_analysis.get('fire_smoke_probability', 0)
@@ -627,41 +531,5 @@ def generate_signal_features(frame_analysis, frame_context=""):
     # People falling in crowd context
     if frame_analysis.get('fall_detected', False) and crowd_density > 0.3:
         features['people_falling_detected'] = 0.85
-    
-    # ===== GPT-4 MINI CLASSIFICATION =====
-    gpt_classification = classify_with_gpt4mini(frame_analysis, frame_context)
-    
-    # Start with GPT index
-    base_index = gpt_classification['crisis_risk_index']
-    features['gpt_hazard_type'] = gpt_classification['hazard_type']
-    features['gpt_confidence'] = gpt_classification['confidence']
-
-    # Heuristic adjustments to boost and vary the index
-    heuristic_index = 0.0
-    # increase sensitivity: lower thresholds, bigger boosts
-    if features['rapid_motion_detected'] > 0.3:
-        heuristic_index = max(heuristic_index, 0.4)
-    if features['fall_detected'] > 0.4:
-        heuristic_index = max(heuristic_index, 0.5)
-    if features['fire_smoke_detected'] > 0.3 or features['fire_glow_detected'] > 0.3:
-        heuristic_index = max(heuristic_index, 0.7)
-    if features['fighting_detected'] > 0.2 or features['aggressive_stance_detected'] > 0.2:
-        heuristic_index = max(heuristic_index, 0.6)
-    if features['crowd_panic_detected'] > 0.2:
-        heuristic_index = max(heuristic_index, 0.6)
-    # additional boost when multiple high signals present
-    high_signals = sum(
-        1 for s in ['rapid_motion_detected','fall_detected','fire_smoke_detected','fighting_detected','crowd_panic_detected']
-        if features.get(s,0) > 0.5
-    )
-    if high_signals >= 2:
-        heuristic_index = min(1.0, heuristic_index + 0.2)
-
-    # combine indexes with stronger weight and random jitter
-    combined = base_index * 1.5 + heuristic_index * 0.7
-    jitter = np.random.uniform(-0.1, 0.1)
-    final_index = min(max(combined + jitter, 0.0), 1.0)
-
-    features['crisis_risk_index'] = final_index
     
     return features

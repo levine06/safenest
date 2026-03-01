@@ -21,6 +21,7 @@ from utils.risk_scorer import analyze_risk
 from utils.video_processor import extract_frames, detect_motion, detect_faces, detect_people_count, get_frame_brightness, detect_fire_smoke, detect_color_anomaly, detect_crowd_density_zones, cleanup_video
 from utils.signal_detector import detect_pose_and_hands, detect_fall, detect_rapid_motion_pose, detect_aggressive_stance, detect_contact_and_fighting, detect_crowd_panic, generate_signal_features
 from utils.domain_classifier import classify_domain_from_signals, signals_to_boolean_dict
+from utils.vision_classifier import select_keyframes, classify_video_with_vision
 import os
 import tempfile
 import cv2
@@ -172,20 +173,26 @@ def analyze_video_endpoint():
     """
     POST /analyze-video
     
-    Analyze CCTV video to detect safety signals and classify domain.
-    Enhanced with violence, emergency, and crowd safety detection.
+    Analyze CCTV video to detect safety signals and classify domain using vision AI.
+    Uses up to 3 keyframes analyzed by GPT-4o-mini for domain classification.
     
     Request: Multipart form-data with video file
     
     Response JSON:
     {
+        "status": "success",
         "primary_domain": str,
         "domain_probabilities": {...},
+        "domain_confidence": float,
+        "gpt_severity": float,
+        "heuristic_risk_score": float,
+        "final_risk_score": float,
+        "keyframes_used": [{timestamp, reasons: [str]}, ...],
+        "gpt_used": bool,
         "signals_detected": {...},
-        "timeline": [{timestamp, signals, confidence}, ...],
-        "risk_score": float,
-        "processing_time": float,
-        "status": "success"
+        "timeline": [...],
+        "frames_analyzed": int,
+        "video_duration": float
     }
     """
     try:
@@ -248,7 +255,7 @@ def analyze_video_endpoint():
                 # Fall detection
                 fall_analysis = detect_fall(pose_hand_analysis['pose_landmarks'])
                 
-                # Aggressive stance detection (NEW)
+                # Aggressive stance detection
                 aggressive_analysis = detect_aggressive_stance(pose_hand_analysis['pose_landmarks'])
                 
                 # Rapid motion detection
@@ -256,14 +263,14 @@ def analyze_video_endpoint():
                 if prev_landmarks is not None:
                     rapid_motion = detect_rapid_motion_pose(prev_landmarks, pose_hand_analysis['pose_landmarks'])
                 
-                # Fighting/contact detection (NEW)
+                # Fighting/contact detection
                 fighting_analysis = detect_contact_and_fighting(
                     prev_landmarks,
                     pose_hand_analysis['pose_landmarks'],
                     face_analysis['faces_detected']
                 )
                 
-                # Crowd panic detection (NEW)
+                # Crowd panic detection
                 panic_analysis = detect_crowd_panic(
                     motion_analysis.get('motion_intensity', 0),
                     face_analysis['faces_detected'],
@@ -283,36 +290,31 @@ def analyze_video_endpoint():
                     'fall_detected': fall_analysis['fall_detected'],
                     # Rapid motion (pose)
                     'rapid_motion_intensity': rapid_motion['motion_intensity'],
-                    # Fire/smoke (NEW)
+                    # Fire/smoke
                     'fire_smoke_probability': fire_smoke_analysis['fire_smoke_probability'],
                     'has_orange_red': fire_smoke_analysis['has_orange_red'],
-                    # Color anomalies (NEW)
+                    # Color anomalies
                     'red_dominance': color_analysis['red_dominance'],
                     'is_flashing': color_analysis['is_flashing'],
-                    # Aggressive behavior (NEW)
+                    # Aggressive behavior
                     'aggressive_stance_probability': aggressive_analysis['aggressive_stance_probability'],
-                    # Fighting (NEW)
+                    # Fighting
                     'fighting_probability': fighting_analysis['fighting_probability'],
                     'contact_detected': fighting_analysis['contact_detected'],
                     'contact_impact_intensity': fighting_analysis['contact_impact_intensity'],
-                    # Crowd issues (NEW)
+                    # Crowd issues
                     'crowd_panic_probability': panic_analysis['crowd_panic_probability'],
                     'is_chaotic': panic_analysis['is_chaotic'],
                     'crowd_vulnerability': panic_analysis['crowd_vulnerability'],
                 }
                 
-                # Generate signal features for this frame
+                # Generate signal features for this frame (heuristic only now)
                 signal_features = generate_signal_features(frame_analysis)
 
                 # Aggregate all signals (keep max confidence score per signal)
-                # Some features such as GPT hazard_type are strings and should be ignored
                 for signal, score in signal_features.items():
                     if isinstance(score, (int, float)):
                         all_signal_features[signal] = max(all_signal_features.get(signal, 0), score)
-                    else:
-                        # keep non-numeric values out of the numeric aggregation
-                        # they may still be returned in the full response if needed
-                        continue
                 
                 # Domain classification for this frame
                 frame_domain = classify_domain_from_signals(
@@ -332,11 +334,10 @@ def analyze_video_endpoint():
                 prev_frame = frame
                 prev_landmarks = pose_hand_analysis['pose_landmarks']
             
-            # ===== OVERALL ANALYSIS =====
+            # ===== HEURISTIC DOMAIN CLASSIFICATION =====
             
-            # Overall domain classification from all frames
             max_motion = max([t['motion_intensity'] for t in timeline], default=0)
-            overall_domain = classify_domain_from_signals(
+            heuristic_domain = classify_domain_from_signals(
                 all_signal_features,
                 {
                     'motion_intensity': max_motion,
@@ -348,22 +349,72 @@ def analyze_video_endpoint():
                 {'faces_detected': max([t.get('signal', {}).get('adult_loitering_detected', 0) for t in timeline], default=0)}
             )
             
-            # Score the risk using standard CRI engine — pass numeric confidence scores (0..1)
-            # to allow proportional contributions rather than strict booleans.
-            risk_result = analyze_risk(all_signal_features, domain=overall_domain['primary_domain'])
+            # ===== HEURISTIC RISK SCORE =====
+            heuristic_risk_result = analyze_risk(all_signal_features, domain=heuristic_domain['primary_domain'])
+            heuristic_risk_score = heuristic_risk_result['risk_score'] / 100.0  # Convert to 0-1 scale
+            
+            # ===== VISION-BASED CLASSIFICATION WITH GPT-4O-MINI =====
+            
+            keyframes_data = select_keyframes(timeline, frames_list)
+            gpt_result = classify_video_with_vision(keyframes_data, all_signal_features)
+            
+            # Extract results with graceful fallback
+            gpt_used = gpt_result.get('gpt_used', False)
+            primary_domain = gpt_result.get('primary_domain', heuristic_domain['primary_domain'])
+            domain_probabilities = gpt_result.get('domain_probabilities', {
+                'child_safety': 0.25,
+                'elder_safety': 0.25,
+                'environmental_hazard': 0.25,
+                'crime': 0.25
+            })
+            gpt_severity = gpt_result.get('severity', 0.0)
+            
+            # If GPT failed, fall back to heuristic domain
+            if not gpt_used:
+                primary_domain = heuristic_domain['primary_domain']
+                domain_probabilities = {
+                    'child_safety': 0.0,
+                    'elder_safety': 0.0,
+                    'environmental_hazard': 0.0,
+                    'crime': 0.0
+                }
+                domain_probabilities[primary_domain] = 1.0
+                gpt_severity = heuristic_risk_score
+            
+            # ===== RISK SCORE CALIBRATION =====
+            # final_risk_score = clamp(max(heuristic_risk, 0.6*gpt_severity + 0.4*heuristic_risk), 0, 1)
+            calibrated_risk = 0.6 * gpt_severity + 0.4 * heuristic_risk_score
+            final_risk_score = max(heuristic_risk_score, calibrated_risk)
+            final_risk_score = max(0.0, min(1.0, final_risk_score))  # Clamp to [0, 1]
+            
+            # ===== BUILD RESPONSE =====
+            
+            # Prepare keyframes_used data for response
+            keyframes_used = []
+            for kf in keyframes_data:
+                keyframes_used.append({
+                    'timestamp': float(kf['timestamp']),
+                    'reasons': kf['reasons']
+                })
             
             response = {
                 'status': 'success',
-                'primary_domain': overall_domain['primary_domain'],
-                'domain_confidence': float(overall_domain['confidence']),
-                'domain_probabilities': overall_domain['domain_probabilities'],
-                'signals_detected': {k: float(v) for k, v in all_signal_features.items()},
-                'risk_score': risk_result['risk_score'],
-                'danger_rank': risk_result['danger_rank'],
-                'danger_tier': risk_result['danger_tier'],
-                'escalation_probability': risk_result['escalation_probability'],
-                'triggered_signals': risk_result['triggered_signals'],
-                'reasoning': overall_domain['reasoning'],
+                'primary_domain': primary_domain,
+                'domain_probabilities': domain_probabilities,
+                'domain_confidence': float(max(domain_probabilities.values())) if domain_probabilities else 0.25,
+                'gpt_severity': float(gpt_severity),
+                'heuristic_risk_score': float(heuristic_risk_score),
+                'final_risk_score': float(final_risk_score),
+                'risk_score': float(final_risk_score),  # For UI compatibility
+                'keyframes_used': keyframes_used,
+                'gpt_used': gpt_used,
+                'signals_detected': {k: float(v) for k, v in all_signal_features.items() if isinstance(v, (int, float))},
+                'danger_rank': heuristic_risk_result['danger_rank'],
+                'danger_tier': heuristic_risk_result['danger_tier'],
+                'escalation_probability': heuristic_risk_result['escalation_probability'],
+                'triggered_signals': heuristic_risk_result['triggered_signals'],
+                'reasoning': gpt_result.get('reasoning', heuristic_domain['reasoning']),
+                'key_observations': gpt_result.get('key_observations', []),
                 'timeline': timeline,
                 'frames_analyzed': len(frames_list),
                 'video_duration': frames_list[-1]['timestamp'] if frames_list else 0
