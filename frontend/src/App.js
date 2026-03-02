@@ -6,7 +6,6 @@ import DomainSelector from './components/DomainSelector';
 import SignalSimulator from './components/SignalSimulator';
 import ResultsCard from './components/ResultsCard';
 import AlertHistory from './components/AlertHistory';
-import PrivacyBanner from './components/PrivacyBanner';
 import HeatMap from './components/HeatMap';
 import VideoUploader from './components/VideoUploader';
 import AnalysisProgress from './components/AnalysisProgress';
@@ -30,7 +29,6 @@ function App() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showPrivacy, setShowPrivacy] = useState(false);
 
   // Video analysis state
   const [videoAnalysisProgress, setVideoAnalysisProgress] = useState(0);
@@ -127,7 +125,7 @@ function App() {
 
       const updateProgress = () => {
         if (responseReceived) return; // Stop when response arrives
-        
+
         // Increment smoothly: 2-5% per update
         currentProgress = Math.min(currentProgress + 2 + Math.random() * 3, 95);
         setVideoAnalysisProgress(currentProgress);
@@ -139,7 +137,7 @@ function App() {
       let elapsedTime = 0;
       const statusInterval = setInterval(() => {
         if (responseReceived) return;
-        
+
         elapsedTime += 1000;
         if (elapsedTime > 8000) setVideoAnalysisStatus('Classifying domain...');
         else if (elapsedTime > 5000) setVideoAnalysisStatus('Analyzing motion & poses...');
@@ -167,7 +165,7 @@ function App() {
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
       clearInterval(statusInterval);
-      
+
       setVideoAnalysisProgress(100);
       setVideoAnalysisStatus('✅ Analysis complete!');
       setVideoAnalysisResult(response.data);
@@ -176,7 +174,7 @@ function App() {
       fetchAlerts();
     } catch (err) {
       let errorMsg = 'Error analyzing video';
-      
+
       if (err.code === 'ECONNABORTED') {
         errorMsg = '⏱️ Request timeout - backend is not responding';
       } else if (err.response?.data?.error) {
@@ -184,7 +182,7 @@ function App() {
       } else if (err.message) {
         errorMsg = err.message;
       }
-      
+
       setError(errorMsg);
       console.error('Video analysis error:', err);
     } finally {
@@ -199,19 +197,28 @@ function App() {
       <header className="header">
         <div className="header-content">
           <h1>
-            <svg className="shield-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 2L4 8V16C4 24 16 30 16 30C16 30 28 24 28 16V8L16 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <svg
+              className="shield-icon"
+              width="32"
+              height="32"
+              viewBox="0 0 32 32"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M16 2L4 8V16C4 24 16 30 16 30C16 30 28 24 28 16V8L16 2Z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
             </svg>
             SafeNest
           </h1>
           <p className="tagline">Privacy-Preserving Community Safety Risk Intelligence</p>
         </div>
       </header>
-
-      {/* Privacy Banner */}
-      {showPrivacy && (
-        <PrivacyBanner onClose={() => setShowPrivacy(false)} />
-      )}
 
       {/* View Tabs */}
       <div className="view-tabs">
@@ -259,9 +266,7 @@ function App() {
                     loading={loading}
                   />
 
-                  {latestResult && (
-                    <ResultsCard result={latestResult} domain={currentDomain} />
-                  )}
+                  {latestResult && <ResultsCard result={latestResult} domain={currentDomain} />}
                 </div>
 
                 {/* Right Column: Alert History */}
